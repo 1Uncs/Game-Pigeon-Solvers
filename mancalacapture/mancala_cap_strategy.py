@@ -65,8 +65,10 @@ class MancalaStrategy(MancalaPlayer):
 			best_move = valid_moves[0]  # default best move
 			for move in valid_moves:
 				board_copy = board.copy()
-				perform_move(board_copy, move, self.bankIndex)
-				_, updated_score = self.minimax(board_copy, depth + 1, MIN, alpha, beta, local_max_depth)
+				final_location = perform_move(board_copy, move, self.bankIndex)
+				# if last pebble lands in our bank, we get another turn (stay MAX)
+				next_turn = MAX if final_location == self.bankIndex else MIN
+				_, updated_score = self.minimax(board_copy, depth + 1, next_turn, alpha, beta, local_max_depth)
 				if updated_score > score:
 					score = updated_score
 					best_move = move
@@ -81,8 +83,10 @@ class MancalaStrategy(MancalaPlayer):
 			best_move_for_opponent = valid_moves[0]
 			for move in valid_moves:
 				board_copy = board.copy()
-				perform_move(board_copy, move, self.opponentBankIndex)
-				_, updated_score = self.minimax(board_copy, depth + 1, MAX, alpha, beta, local_max_depth)
+				final_location = perform_move(board_copy, move, self.opponentBankIndex)
+				# if last pebble lands in opponent's bank, they get another turn (stay MIN)
+				next_turn = MIN if final_location == self.opponentBankIndex else MAX
+				_, updated_score = self.minimax(board_copy, depth + 1, next_turn, alpha, beta, local_max_depth)
 				if updated_score < score:
 					score = updated_score
 					best_move_for_opponent = move

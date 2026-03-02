@@ -18,7 +18,7 @@ from mancalacapture.constants import POCKETS_PER_SIDE, BOARD_OUTPUT_HEIGHT, PLAY
 from mancalacapture.mancala_cap_strategy import MancalaStrategy
 
 USE_REVERSED_PRINT_LAYOUT = False
-BOARD = [4] * 6 + [0] + [4] * 6 + [0]
+BOARD = []  # will be populated from user input at runtime
 PLAYER1_ID = 1
 PLAYER2_ID = 2
 SAVE_FILENAME = path_to_save_file("mancala_cap_save.txt")
@@ -129,7 +129,7 @@ def print_average_time_taken_by_players(time_taken_per_player):
 
 def print_ascii_art():
 	"""Prints the Mancala Capture Ascii Art"""
-	print("""
+	print(r"""
   __  __                       _       
  |  \/  |                     | |      
  | \  / | __ _ _ __   ___ __ _| | __ _ 
@@ -144,6 +144,48 @@ def print_ascii_art():
              | |                       
              |_|  
     """)
+
+
+def input_for_board():
+	"""Reads in the input for the board from the user"""
+	player_values_input = input(f"""
+From your left to your right (or top to bottom), enter the # of pebbles in
+each spot on {GREEN_COLOR}your{NO_COLOR} side of the board, with a space separating each number:
+
+    """).strip().split()
+	while True:
+		try:
+			erase_previous_lines(1)
+			player_vals = [int(item) for item in player_values_input]
+			if len(player_vals) != POCKETS_PER_SIDE:
+				player_values_input = input(f"{ERROR_SYMBOL} There should be {POCKETS_PER_SIDE} values entered.\t").strip().split()
+				continue
+			break
+		except ValueError:
+			player_values_input = input(
+				f"{ERROR_SYMBOL} There was an issue with your input. Please try again.\t").strip().split()
+	erase_previous_lines(4)
+
+	enemy_values_input = input(f"""
+From your left to your right (or top to bottom), enter the # of pebbles in
+each spot on the {RED_COLOR}enemy{NO_COLOR} side of the board, with a space separating each number:
+
+    """).strip().split()
+	while True:
+		erase_previous_lines(1)
+		try:
+			enemy_vals = [int(item) for item in enemy_values_input]
+			if len(enemy_vals) != POCKETS_PER_SIDE:
+				enemy_values_input = input(f"{ERROR_SYMBOL} There should be {POCKETS_PER_SIDE} values entered.\t").strip().split()
+				continue
+			break
+		except ValueError:
+			enemy_values_input = input(
+				f"{ERROR_SYMBOL} There was an issue with your input. Please try again.\t").strip().split()
+	erase_previous_lines(4)
+
+	enemy_vals.reverse()
+	return player_vals + [0] + enemy_vals + [0]
 
 
 def save_game(board, turn):
@@ -291,116 +333,55 @@ def get_board_history_input_from_user(is_ai):
 
 
 def run():
-	if "-d" in sys.argv or "-aiDuel" in sys.argv:
-		UserPlayerClass = get_dueling_ai_class(MancalaPlayer, "MancalaStrategy")
-		print()
-		info("You are in AI Duel Mode!")
-		ai_duel_mode = True
-	else:
-		UserPlayerClass = HumanPlayer
-		ai_duel_mode = False
+	global BOARD
 	print_ascii_art()
+	BOARD = input_for_board()
+	strategy = MancalaStrategy(PLAYER1_BANK_INDEX)
 
-	players = {  # remove hardcode values later
-		PLAYER1_ID: UserPlayerClass(PLAYER1_BANK_INDEX),
-		PLAYER2_ID: MancalaStrategy(PLAYER2_BANK_INDEX)
-	}
-	name_of_player1 = "Your AI" if ai_duel_mode else "Human"
-	name_of_player2 = "My AI" if ai_duel_mode else "AI"
-	player_names = {
-		PLAYER1_ID: name_of_player1,
-		PLAYER2_ID: name_of_player2
-	}
-	time_taken_per_player = {
-		PLAYER1_ID: [name_of_player1, 0, 0],  # [player name, total time, num moves]
-		PLAYER2_ID: [name_of_player2, 0, 0]
-	}
+	print("\nThe current board looks like this:\n")
+	print_board(BOARD)
+	print()
 
-	turn = PLAYER1_ID
-	use_saved_game = False
-	if os.path.exists(SAVE_FILENAME):
-		turn_from_save_file = load_saved_game()
-		if turn_from_save_file is not None:
-			turn = turn_from_save_file
-			use_saved_game = True
-			BOARD_HISTORY.append([-1, turn, BOARD.copy()])
-
-	if not use_saved_game:
-		user_go_first = input("Would you like to go first? (y/n):\t").strip().upper()
+	first_iteration = True
+	extra_lines_above_board = 4  # header(3) + blank(1) on first iteration
+	while True:
+		user_input = input("Press enter to receive best move, or 'q' to quit.\t").strip().lower()
 		erase_previous_lines(1)
-		if user_go_first == "Y":
-			turn = PLAYER1_ID
-			print("%s will go first!" % player_names[turn])
+		if user_input == 'q':
+			print("\nThanks for playing!\n")
+			exit(0)
+
+		best_move = strategy.get_move(BOARD)
+		move_num = best_move + 1  # indices 0-5 -> spots 1-6
+		final_pebble_location = perform_move(BOARD, best_move, PLAYER1_BANK_INDEX)
+		extra_turn = (final_pebble_location == PLAYER1_BANK_INDEX)
+
+		erase_previous_lines(BOARD_OUTPUT_HEIGHT + extra_lines_above_board)
+		print_board(BOARD, PLAYER1_ID, best_move)
+		print("Best move: spot %d.%s\n" % (move_num, " Last pebble landed in your bank — you get another turn!" if extra_turn else ""))
+
+		if is_board_terminal(BOARD):
+			push_all_pebbles_to_bank(BOARD)
+			erase_previous_lines(BOARD_OUTPUT_HEIGHT + 2)
+			print_board(BOARD)
+			winner_bank = winning_player_bank_index(BOARD)
+			if winner_bank == PLAYER1_BANK_INDEX:
+				print("You win!\n")
+			elif winner_bank == PLAYER2_BANK_INDEX:
+				print("Opponent wins!\n")
+			else:
+				print("It's a tie!\n")
+			break
+
+		if not extra_turn:
+			print("Input the new board after the opponent's turn.")
+			BOARD = input_for_board()
+			erase_previous_lines(BOARD_OUTPUT_HEIGHT + 3)
+			print_board(BOARD)
+			print()
+			extra_lines_above_board = 1  # next erase: board(BOARD_OUTPUT_HEIGHT) + blank(1)
 		else:
-			turn = PLAYER2_ID
-			print("%s will go first!" % player_names[turn])
+			extra_lines_above_board = 2  # next erase: board + "Best move...\n" (2 lines)
 
-	print("Type 'q' to quit.")
-	print("Type 'f' to flip the board orientation 180 degrees.")
-	print("Type 's' to save the game.")
-	print("Type 'h' to see previous moves.")
+		first_iteration = False
 
-	game_over = False
-	print_board(BOARD)
-	print("\n")
-	extra_lines_printed = 2
-	while not game_over:
-		name_of_current_player = player_names[turn]
-		current_player = players[turn]
-		if current_player.is_ai:
-			user_input = input(f"{name_of_current_player}'s turn, press enter for it to play.\t").strip().upper()
-			erase_previous_lines(1)
-			while user_input in ['Q', 'H', 'F', 'S']:
-				if user_input == 'Q':
-					print_average_time_taken_by_players(time_taken_per_player)
-					print("\nThanks for playing!\n")
-					exit(0)
-				elif user_input == 'H':
-					user_input = get_board_history_input_from_user(is_ai=True)
-				elif user_input == 'F':
-					global USE_REVERSED_PRINT_LAYOUT
-					USE_REVERSED_PRINT_LAYOUT = not USE_REVERSED_PRINT_LAYOUT
-					erase_previous_lines(BOARD_OUTPUT_HEIGHT + 2)
-					print_board(BOARD)
-					print("\n")
-					user_input = input(f"Board print layout changed. Press enter to continue:\t").strip().upper()
-					erase_previous_lines(1)
-				else:
-					save_game(BOARD, turn)
-					user_input = input(
-						f"Press enter for {name_of_current_player} to play, or press 'q' to quit:\t").strip().upper()
-					erase_previous_lines(2)
-
-		start_time = time.time()
-		chosen_move = current_player.get_move(BOARD)
-		end_time = time.time()
-		total_time_taken_for_move = end_time - start_time
-		time_taken_per_player[turn][1] += total_time_taken_for_move
-		time_taken_per_player[turn][2] += 1
-		minutes_taken = int(total_time_taken_for_move) // 60
-		seconds_taken = total_time_taken_for_move % 60
-		time_taken_output_str = ("  (%dm " if minutes_taken > 0 else "  (") + (
-				"%.2fs)" % seconds_taken) if current_player.is_ai else ""
-		final_pebble_location = perform_move(BOARD, chosen_move, current_player.bankIndex)
-		BOARD_HISTORY.append([chosen_move, turn, BOARD.copy()])
-		erase_previous_lines(BOARD_OUTPUT_HEIGHT + extra_lines_printed)
-		print_board(BOARD, turn, chosen_move)
-		move_formatted = str(min(BOARD_SIZE - 2 - chosen_move, chosen_move) + 1)
-		print("%s played in spot %s%s. " % (name_of_current_player, move_formatted, time_taken_output_str), end='')
-		if final_pebble_location != current_player.bankIndex:
-			print("\n")
-			turn = opponent_of(turn)
-		else:
-			print("%s's move ended in their bank, so they get another turn.\n" % name_of_current_player)
-		extra_lines_printed = 2
-		game_over = is_board_terminal(BOARD)
-
-	push_all_pebbles_to_bank(BOARD)
-	erase_previous_lines(BOARD_OUTPUT_HEIGHT + extra_lines_printed)
-	print_board(BOARD)
-	winner_id = PLAYER1_ID if winning_player_bank_index(BOARD) == PLAYER1_BANK_INDEX else PLAYER2_ID
-	if winner_id is None:
-		print("It's a tie!\n")
-	else:
-		print("%s wins!\n" % player_names[winner_id])
-	print_average_time_taken_by_players(time_taken_per_player)
