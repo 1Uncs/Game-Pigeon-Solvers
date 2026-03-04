@@ -5,6 +5,9 @@ import os
 import sys
 import time
 from datetime import datetime
+
+# Add the root directory to sys.path to allow running this script directly
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from util.terminaloutput.colors import RED_COLOR, GREEN_COLOR, NO_COLOR, color_text
 from util.terminaloutput.symbols import ERROR_SYMBOL, INFO_SYMBOL, info
 from util.terminaloutput.erasing import erase_previous_lines
@@ -385,3 +388,5 @@ def run():
 
 		first_iteration = False
 
+if __name__ == '__main__':
+	run()
