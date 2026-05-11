@@ -39,7 +39,7 @@ mode_select_str = """
 [9]  Word Bites  (--game=wordbites)
 [10] Word Hunt   (--game=wordhunt)
 """
-ascii_art = """
+ascii_art = r"""
               _  __     _      _                               
              | |/ /    | |    ( )                              
              | ' /_   _| | ___|/ ___                           

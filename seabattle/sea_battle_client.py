@@ -342,7 +342,30 @@ def generate_space_densities():
 
 	space_densities = []
 	for i in range(SIZE):
-		space_densities.append([0]*SIZE)
+		space_densities.append([0.0]*SIZE)
+
+	# Game Pigeon Rule: Ships cannot touch diagonally. 
+	# If we have a HIT, all diagonal neighbors MUST be EMPTY/MISS (so we mark as MISS for density purposes)
+	for r in range(SIZE):
+		for c in range(SIZE):
+			if game_board[r][c] == HIT:
+				for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+					nr, nc = r + dr, c + dc
+					if 0 <= nr < SIZE and 0 <= nc < SIZE and game_board[nr][nc] == EMPTY:
+						# We don't modify game_board here to avoid side effects during density gen, 
+						# but we treat them as unavailable for ships.
+						pass 
+
+	# Helper to check if a spot is effectively unavailable
+	def is_unavailable(r, c):
+		if not (0 <= r < SIZE and 0 <= c < SIZE): return True
+		if game_board[r][c] in [MISS, DESTROY]: return True
+		# Diagonal hit check
+		for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+			nr, nc = r + dr, c + dc
+			if 0 <= nr < SIZE and 0 <= nc < SIZE and game_board[nr][nc] == HIT:
+				return True
+		return False
 
 	# Look at horizontal open space and fill space_densities accordingly
 	for row_index in range(SIZE):
@@ -351,11 +374,12 @@ def generate_space_densities():
 		next_open_spot = 0
 		evaluating_row = True
 		while evaluating_row:
-			while next_open_spot < SIZE and row[next_open_spot] in [MISS, DESTROY]:
+			while next_open_spot < SIZE and (row[next_open_spot] in [MISS, DESTROY] or is_unavailable(row_index, next_open_spot)):
 				next_open_spot += 1
 			if next_open_spot == SIZE:
 				break
-			while next_unavailable_index < SIZE and row[next_unavailable_index] in [EMPTY, HIT]:
+			next_unavailable_index = next_open_spot
+			while next_unavailable_index < SIZE and not is_unavailable(row_index, next_unavailable_index):
 				next_unavailable_index += 1
 			fill_list_with_density_pyramid_data(space_densities[row_index], next_open_spot, next_unavailable_index - next_open_spot)
 			if next_unavailable_index == SIZE:
@@ -370,13 +394,14 @@ def generate_space_densities():
 		next_open_spot = 0
 		evaluating_col = True
 		while evaluating_col:
-			while next_open_spot < SIZE and col[next_open_spot] in [MISS, DESTROY]:
+			while next_open_spot < SIZE and (col[next_open_spot] in [MISS, DESTROY] or is_unavailable(next_open_spot, col_index)):
 				next_open_spot += 1
 			if next_open_spot == SIZE:
 				break
-			while next_unavailable_index < SIZE and col[next_unavailable_index] in [EMPTY, HIT]:
+			next_unavailable_index = next_open_spot
+			while next_unavailable_index < SIZE and not is_unavailable(next_unavailable_index, col_index):
 				next_unavailable_index += 1
-			density_col = [0]*SIZE
+			density_col = [0.0]*SIZE
 			fill_list_with_density_pyramid_data(density_col, next_open_spot, next_unavailable_index - next_open_spot)
 			for row_index in range(SIZE):
 				space_densities[row_index][col_index] += density_col[row_index]
@@ -386,8 +411,15 @@ def generate_space_densities():
 			next_unavailable_index += 1
 
 	# Give preference to spots where a hit/sink would clear the most space on the board (spaces with more open immediate neighbors)
+	# Apply Parity and Neighbor Bonus
+	min_ship_size = min([s for s, count in REMAINING_SHIPS.items() if count > 0] or [1])
 	for row_index in range(SIZE):
 		for col_index in range(SIZE):
+			# Parity: if min ship size > 1, favor checkerboard pattern to find ships faster
+			if min_ship_size > 1:
+				if (row_index + col_index) % min_ship_size != 0:
+					space_densities[row_index][col_index] *= 0.8
+			
 			space_densities[row_index][col_index] *= (1 + 0.05 * get_num_immediate_neighbors(row_index, col_index))
 
 	# high scores for partially-sunken ships; also change hits to 0 scores
